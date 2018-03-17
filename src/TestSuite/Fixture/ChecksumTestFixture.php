@@ -17,11 +17,18 @@ class ChecksumTestFixture extends TestFixture
 {
 
 /**
- * List of table hashes
+ * List of table hashes each fixture
  *
  * @var array
  */
-    public static $_tableHashes = [];
+    protected static $_tableHashes = [];
+
+/**
+ * List of insert record hashes each table
+ *
+ * @var array
+ */
+    protected static $_recordHashes = [];
 
 /**
  * Inserts records in the database
@@ -37,9 +44,15 @@ class ChecksumTestFixture extends TestFixture
         if ($this->_tableUnmodified($db)) {
             return true;
         }
+        if ($this->_hasSameRecord()) {
+            return true;
+        }
 
         $result = parent::insert($db);
-        static::$_tableHashes[$this->_getTableKey()] = $this->_hash($db);
+
+        static::$_tableHashes[static::class] = $this->_hash($db);
+        static::$_recordHashes[$this->_getTableKey()] = $this->_getRecordHash();
+
         return $result;
     }
 
@@ -57,6 +70,8 @@ class ChecksumTestFixture extends TestFixture
             return true;
         }
 
+        unset(static::$_recordHashes[$this->_getTableKey()]);
+
         return parent::truncate($db);
     }
 
@@ -68,7 +83,9 @@ class ChecksumTestFixture extends TestFixture
  */
     public function drop(ConnectionInterface $db)
     {
-        unset(static::$_tableHashes[$this->table]);
+        unset(static::$_tableHashes[static::class]);
+        unset(static::$_recordHashes[$this->_getTableKey()]);
+
         return parent::drop($db);
     }
 
@@ -85,12 +102,11 @@ class ChecksumTestFixture extends TestFixture
  */
     protected function _tableUnmodified($db)
     {
-        $tableKey = $this->_getTableKey();
-        if (empty(static::$_tableHashes[$tableKey])) {
+        if (empty(static::$_tableHashes[static::class])) {
             return false;
         }
 
-        if (static::$_tableHashes[$tableKey] === $this->_hash($db)) {
+        if (static::$_tableHashes[static::class] === $this->_hash($db)) {
             return true;
         }
 
@@ -126,5 +142,33 @@ class ChecksumTestFixture extends TestFixture
     protected function _getTableKey ()
     {
         return $this->connection() . '-' . $this->table;
+    }
+
+/**
+ * Test if a table records is already inserted other fixture.
+ *
+ * @return bool
+ */
+    protected function _hasSameRecord()
+    {
+        if (empty(static::$_recordHashes[$this->_getTableKey()])) {
+            return false;
+    }
+
+        if (static::$_recordHashes[$this->_getTableKey()] === $this->_getRecordHash()) {
+            return true;
+        }
+
+        return false;
+    }
+
+/**
+ * Get record hash
+ *
+ * @return string
+ */
+    protected function _getRecordHash()
+    {
+        return hash('sha256', serialize($this->records));
     }
 }
